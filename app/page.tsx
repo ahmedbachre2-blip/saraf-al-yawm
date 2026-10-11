@@ -19,7 +19,6 @@ const formatMoney = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
 };
 
-// مكوّن شعار العملة (SH للدورو الصحراوي)
 const CurrencyFlag = ({ code, size = 'lg' }: { code: string; size?: 'lg' | 'sm' }) => {
   const sz = size === 'lg' ? 'w-9 h-9 text-[11px]' : 'w-7 h-7 text-[9px]';
   if (code === 'EUR') return <span className={size === 'lg' ? 'text-3xl' : 'text-xl'}>🇪🇺</span>;
@@ -56,7 +55,7 @@ export default function Home() {
   const [adminRates, setAdminRates] = useState<any>({
     'EUR_DZD': { buyBase: '100', buyQuote: '14500', sellBase: '100', sellQuote: '14700', buyBaseW: '1000', buyQuoteW: '148000', sellBaseW: '1000', sellQuoteW: '150000' },
     'EUR_MRU': { buyBase: '100', buyQuote: '4250', sellBase: '100', sellQuote: '4400', buyBaseW: '1000', buyQuoteW: '43500', sellBaseW: '1000', sellQuoteW: '45000' },
-    'DZD_MRU': { buyBase: '345', buyQuote: '100', sellBase: '335', sellQuote: '100', buyBaseW: '3390', buyQuoteW: '1000', sellBaseW: '3280', sellQuoteW: '1000' },
+    'DZD_MRU': { buyBase: '100', buyQuote: '345', sellBase: '100', sellQuote: '335', buyBaseW: '1000', buyQuoteW: '3390', sellBaseW: '1000', sellQuoteW: '3280' },
   });
 
   useEffect(() => {
@@ -79,28 +78,28 @@ export default function Home() {
       
       data.forEach((row: any) => {
         const key = `${row.from_currency}_${row.to_currency}`;
-        
-        newRates[key] = {
-          buy: row.buy_rate,
-          sell: row.sell_rate,
-          buyWholesale: row.buy_rate_wholesale || row.buy_rate * 1.02,
-          sellWholesale: row.sell_rate_wholesale || row.sell_rate * 1.02,
-        };
-
         const buyW = row.buy_rate_wholesale || row.buy_rate * 1.02;
         const sellW = row.sell_rate_wholesale || row.sell_rate * 1.02;
 
-        // ✅ حالة خاصة لـ DURO/MRU: نعرضها بنفس الطريقة التي أدخلها المستخدم
+        newRates[key] = {
+          buy: row.buy_rate,
+          sell: row.sell_rate,
+          buyWholesale: buyW,
+          sellWholesale: sellW,
+        };
+
         if (row.from_currency === 'DZD' && row.to_currency === 'MRU') {
+          // ✅ معالجة خاصة: نعرض "100 MRU = X DURO"
+          // buy_rate = MRU per 1 DURO، لذا 100 MRU = 100/buy_rate DURO
           newAdminRates[key] = {
-            buyBase: (100 / row.buy_rate).toString(),
-            buyQuote: '100',
-            sellBase: (100 / row.sell_rate).toString(),
-            sellQuote: '100',
-            buyBaseW: (1000 / buyW).toString(),
-            buyQuoteW: '1000',
-            sellBaseW: (1000 / sellW).toString(),
-            sellQuoteW: '1000',
+            buyBase: '100',
+            buyQuote: (100 / row.buy_rate).toString(),
+            sellBase: '100',
+            sellQuote: (100 / row.sell_rate).toString(),
+            buyBaseW: '1000',
+            buyQuoteW: (1000 / buyW).toString(),
+            sellBaseW: '1000',
+            sellQuoteW: (1000 / sellW).toString(),
           };
         } else {
           newAdminRates[key] = {
@@ -122,7 +121,6 @@ export default function Home() {
     setIsLoading(false);
   };
 
-  // ✅ السجل: آخر سعرين لكل زوج
   const fetchHistory = async () => {
     const { data, error } = await supabase
       .from('rate_history')
@@ -174,6 +172,19 @@ export default function Home() {
       const numBuyQuoteW = parseFloat(r.buyQuoteW) || 0;
       const numSellBaseW = parseFloat(r.sellBaseW) || 1;
       const numSellQuoteW = parseFloat(r.sellQuoteW) || 0;
+
+      // ✅ معالجة خاصة لزوج DZD/MRU: المستخدم يُدخل "100 MRU = X DURO"
+      // لذا buy_rate = MRU per 1 DURO = buyBase / buyQuote
+      if (from === 'DZD' && to === 'MRU') {
+        return {
+          from_currency: from,
+          to_currency: to,
+          buy_rate: numBuyBase / (numBuyQuote || 1),
+          sell_rate: numSellBase / (numSellQuote || 1),
+          buy_rate_wholesale: numBuyBaseW / (numBuyQuoteW || 1),
+          sell_rate_wholesale: numSellBaseW / (numSellQuoteW || 1),
+        };
+      }
 
       return {
         from_currency: from,
@@ -358,11 +369,11 @@ export default function Home() {
             
             <div className="space-y-6">
               {[
-                { key: 'EUR_DZD', fromCode: 'EUR', toCode: 'DZD' },
-                { key: 'EUR_MRU', fromCode: 'EUR', toCode: 'MRU' },
+                { key: 'EUR_DZD', fromCode: 'EUR', toCode: 'DZD', flipped: false },
+                { key: 'EUR_MRU', fromCode: 'EUR', toCode: 'MRU', flipped: false },
                 { key: 'DZD_MRU', fromCode: 'DZD', toCode: 'MRU', flipped: true },
               ].map((pair) => {
-                // ✅ للزوج DURO/MRU نعرض MRU على اليمين (كأساس) و DURO على اليسار
+                // rightCode هو العملة المعروضة على اليمين (كأساس)
                 const rightCode = pair.flipped ? 'MRU' : pair.fromCode;
                 const leftCode = pair.flipped ? pair.fromCode : pair.toCode;
                 
@@ -521,33 +532,36 @@ export default function Home() {
           ) : (
             <div className="space-y-4">
               {historyData.map((item: any, idx: number) => {
-                const diff = item.newBuy - item.oldBuy;
-                const isUp = diff > 0;
-                const isDown = diff < 0;
-                const oldAmount = formatMoney(100 * item.oldBuy);
-                const newAmount = formatMoney(100 * item.newBuy);
-                const diffAmount = formatMoney(Math.abs(diff * 100));
-                const fromDisplay = displayCurrency(item.from);
-                const toDisplay = displayCurrency(item.to);
+                const isDzdMru = item.from === 'DZD' && item.to === 'MRU';
+                // ✅ لزوج DZD/MRU نعرض "100 MRU = X DURO"
+                const oldAmount = isDzdMru ? (100 / item.oldBuy) : (100 * item.oldBuy);
+                const newAmount = isDzdMru ? (100 / item.newBuy) : (100 * item.newBuy);
+                const diffAmount = isDzdMru 
+                  ? Math.abs((100 / item.newBuy) - (100 / item.oldBuy)) 
+                  : Math.abs((item.newBuy - item.oldBuy) * 100);
+                const isUp = isDzdMru ? (item.newBuy < item.oldBuy) : (item.newBuy > item.oldBuy);
+                const isDown = isDzdMru ? (item.newBuy > item.oldBuy) : (item.newBuy < item.oldBuy);
+                const fromDisplay = isDzdMru ? 'MRU' : displayCurrency(item.from);
+                const toDisplay = isDzdMru ? 'DURO' : displayCurrency(item.to);
                 
                 return (
                   <div key={idx} className="bg-[#112240] p-4 rounded-2xl border border-[#233554]">
                     <div className="flex justify-between items-center mb-3">
                       <div className="flex items-center gap-2">
-                        <CurrencyFlag code={item.from} size="sm" />
+                        <CurrencyFlag code={isDzdMru ? 'MRU' : item.from} size="sm" />
                         <span className="font-bold text-lg">{fromDisplay}</span>
                         <span className="text-gray-500">➡️</span>
-                        <CurrencyFlag code={item.to} size="sm" />
+                        <CurrencyFlag code={isDzdMru ? 'DZD' : item.to} size="sm" />
                         <span className="font-bold text-lg">{toDisplay}</span>
                       </div>
                       {isUp && <TrendingUp className="text-red-400 w-5 h-5" />}
                       {isDown && <TrendingDown className="text-green-400 w-5 h-5" />}
                     </div>
                     <div className="space-y-1 text-sm">
-                      <p className="text-gray-300">سابقاً: 100 {fromDisplay} = <span className="text-gray-400">{oldAmount} {toDisplay}</span></p>
-                      <p className="text-gray-300">الآن: 100 {fromDisplay} = <span className="text-white font-bold">{newAmount} {toDisplay}</span></p>
-                      {isUp && <p className="font-bold text-red-400 mt-2">📈 زاد السعر بـ {diffAmount} {toDisplay}</p>}
-                      {isDown && <p className="font-bold text-green-400 mt-2">📉 نقص السعر بـ {diffAmount} {toDisplay}</p>}
+                      <p className="text-gray-300">سابقاً: 100 {fromDisplay} = <span className="text-gray-400">{formatMoney(oldAmount)} {toDisplay}</span></p>
+                      <p className="text-gray-300">الآن: 100 {fromDisplay} = <span className="text-white font-bold">{formatMoney(newAmount)} {toDisplay}</span></p>
+                      {isUp && <p className="font-bold text-red-400 mt-2">📈 زاد السعر بـ {formatMoney(diffAmount)} {toDisplay}</p>}
+                      {isDown && <p className="font-bold text-green-400 mt-2">📉 نقص السعر بـ {formatMoney(diffAmount)} {toDisplay}</p>}
                     </div>
                   </div>
                 );
