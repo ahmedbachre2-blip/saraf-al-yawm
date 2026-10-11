@@ -11,7 +11,11 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const THRESHOLD = 1000;
 const APP_VERSION = '1.0.0';
 const CONTACT_EMAIL = 'ahmedbacare95@gmail.com';
-const WHATSAPP_NUMBER = '213666899713'; // ← رقمك بصيغة دولية بدون +
+const WHATSAPP_NUMBER = '213666899713';
+
+// تحويل رمز العملة المخزّن إلى الاسم المعروض
+const displayCurrency = (code: string) => code === 'DZD' ? 'DURO' : code;
+const displayFlag = (code: string) => code === 'EUR' ? '🇪🇺' : code === 'DZD' ? '🇪🇭' : '🇲🇷';
 
 const formatMoney = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
@@ -253,7 +257,6 @@ export default function Home() {
 
         {!isAdmin ? (
           <div className="space-y-6">
-            {/* معلومات التطبيق */}
             <div className="bg-[#112240] p-6 rounded-3xl border border-[#233554] text-center">
               <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg shadow-green-500/30">💱</div>
               <h2 className="text-2xl font-bold mb-1">صرف اليوم</h2>
@@ -264,7 +267,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* التواصل */}
             <div className="bg-[#112240] p-5 rounded-3xl border border-[#233554]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
@@ -280,7 +282,6 @@ export default function Home() {
               </a>
             </div>
 
-            {/* الدخول للموظفين */}
             <div className="bg-[#112240] p-6 rounded-3xl border border-[#233554]">
               <div className="text-center mb-5">
                 <div className="w-12 h-12 bg-[#0B1120] rounded-full flex items-center justify-center mx-auto mb-3 border border-[#233554]">
@@ -308,7 +309,6 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          // ===== لوحة تحكم الموظفين =====
           <div className="bg-[#112240] p-5 rounded-3xl border border-[#233554]">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#233554]">
               <h2 className="text-lg font-bold text-green-400">لوحة تحكم الموظفين</h2>
@@ -328,9 +328,9 @@ export default function Home() {
             
             <div className="space-y-6">
               {[
-                { key: 'EUR_DZD', label: '🇪🇺 يورو ➡️ 🇩🇿 دينار', from: 'EUR', to: 'DZD' },
+                { key: 'EUR_DZD', label: '🇪🇺 يورو ➡️ 🇪🇭 دورو', from: 'EUR', to: 'DURO' },
                 { key: 'EUR_MRU', label: '🇪🇺 يورو ➡️ 🇲🇷 أوقية', from: 'EUR', to: 'MRU' },
-                { key: 'DZD_MRU', label: '🇩🇿 دينار ➡️ 🇲🇷 أوقية', from: 'DZD', to: 'MRU' },
+                { key: 'DZD_MRU', label: '🇪🇭 دورو ➡️ 🇲🇷 أوقية', from: 'DURO', to: 'MRU' },
               ].map((pair) => (
                 <div key={pair.key} className="bg-[#0B1120] p-4 rounded-xl border border-[#233554]">
                   <h3 className="font-bold text-sm mb-4 text-center text-yellow-400">{pair.label}</h3>
@@ -412,10 +412,10 @@ export default function Home() {
           <div className="bg-[#112240] rounded-3xl p-5 border border-[#233554] mb-6 shadow-xl">
             <div className="flex justify-between items-center bg-[#0B1120] rounded-2xl p-4 mb-3 border border-[#233554]">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{fromCurrency === 'EUR' ? '🇪🇺' : fromCurrency === 'DZD' ? '🇩🇿' : '🇲🇷'}</span>
+                <span className="text-3xl">{displayFlag(fromCurrency)}</span>
                 <select value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} className="bg-transparent text-white font-bold outline-none text-lg cursor-pointer">
                   <option value="EUR" className="bg-[#112240]">EUR - يورو</option>
-                  <option value="DZD" className="bg-[#112240]">DZD - دينار جزائري</option>
+                  <option value="DZD" className="bg-[#112240]">DURO - دورو صحراوي</option>
                   <option value="MRU" className="bg-[#112240]">MRU - أوقية موريتانية</option>
                 </select>
               </div>
@@ -430,9 +430,9 @@ export default function Home() {
 
             <div className="flex justify-between items-center bg-[#0B1120] rounded-2xl p-4 mt-3 border border-[#233554]">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{toCurrency === 'EUR' ? '🇪🇺' : toCurrency === 'DZD' ? '🇩🇿' : '🇲🇷'}</span>
+                <span className="text-3xl">{displayFlag(toCurrency)}</span>
                 <select value={toCurrency} onChange={(e) => setToCurrency(e.target.value)} className="bg-transparent text-white font-bold outline-none text-lg cursor-pointer">
-                  <option value="DZD" className="bg-[#112240]">DZD - دينار جزائري</option>
+                  <option value="DZD" className="bg-[#112240]">DURO - دورو صحراوي</option>
                   <option value="EUR" className="bg-[#112240]">EUR - يورو</option>
                   <option value="MRU" className="bg-[#112240]">MRU - أوقية موريتانية</option>
                 </select>
@@ -446,7 +446,7 @@ export default function Home() {
 
           <div className="bg-[#112240] rounded-2xl p-4 border border-[#233554] mb-8 flex justify-between items-center">
             <div className="border-r-4 border-green-500 pr-3 space-y-2">
-              <p className="text-sm font-bold">1 {fromCurrency} = <span className="text-blue-400 mr-1">{formatMoney(buyRate)}</span> (شراء) | <span className="text-green-400 mr-1">{formatMoney(sellRate)}</span> (بيع)</p>
+              <p className="text-sm font-bold">1 {displayCurrency(fromCurrency)} = <span className="text-blue-400 mr-1">{formatMoney(buyRate)}</span> (شراء) | <span className="text-green-400 mr-1">{formatMoney(sellRate)}</span> (بيع)</p>
               <p className="text-xs text-gray-400">آخر تحديث: اليوم</p>
             </div>
             <Clock className="w-4 h-4 text-gray-500" />
@@ -485,20 +485,22 @@ export default function Home() {
                 const oldAmount = formatMoney(100 * item.oldBuy);
                 const newAmount = formatMoney(100 * item.newBuy);
                 const diffAmount = formatMoney(Math.abs(diff * 100));
+                const fromDisplay = displayCurrency(item.from);
+                const toDisplay = displayCurrency(item.to);
                 
                 return (
                   <div key={idx} className="bg-[#112240] p-4 rounded-2xl border border-[#233554]">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-bold text-lg">{item.from} ➡️ {item.to}</span>
+                      <span className="font-bold text-lg">{fromDisplay} ➡️ {toDisplay}</span>
                       {isUp && <TrendingUp className="text-red-400 w-5 h-5" />}
                       {isDown && <TrendingDown className="text-green-400 w-5 h-5" />}
                       {!isUp && !isDown && <span className="text-gray-400 text-xs">مستقر</span>}
                     </div>
                     <div className="space-y-1 text-sm">
-                      <p className="text-gray-300">سابقاً: 100 {item.from} = <span className="text-gray-400">{oldAmount} {item.to}</span></p>
-                      <p className="text-gray-300">الآن: 100 {item.from} = <span className="text-white font-bold">{newAmount} {item.to}</span></p>
-                      {isUp && <p className="font-bold text-red-400 mt-2">📈 زاد السعر بـ {diffAmount} {item.to}</p>}
-                      {isDown && <p className="font-bold text-green-400 mt-2">📉 نقص السعر بـ {diffAmount} {item.to}</p>}
+                      <p className="text-gray-300">سابقاً: 100 {fromDisplay} = <span className="text-gray-400">{oldAmount} {toDisplay}</span></p>
+                      <p className="text-gray-300">الآن: 100 {fromDisplay} = <span className="text-white font-bold">{newAmount} {toDisplay}</span></p>
+                      {isUp && <p className="font-bold text-red-400 mt-2">📈 زاد السعر بـ {diffAmount} {toDisplay}</p>}
+                      {isDown && <p className="font-bold text-green-400 mt-2">📉 نقص السعر بـ {diffAmount} {toDisplay}</p>}
                       {!isUp && !isDown && <p className="font-bold text-gray-400 mt-2">➖ لم يتغير السعر</p>}
                     </div>
                   </div>
