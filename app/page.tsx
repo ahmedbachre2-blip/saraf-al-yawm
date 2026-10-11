@@ -19,7 +19,7 @@ const formatMoney = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
 };
 
-// مكوّن شعار العملة
+// مكوّن شعار العملة (SH للدورو الصحراوي)
 const CurrencyFlag = ({ code, size = 'lg' }: { code: string; size?: 'lg' | 'sm' }) => {
   const sz = size === 'lg' ? 'w-9 h-9 text-[11px]' : 'w-7 h-7 text-[9px]';
   if (code === 'EUR') return <span className={size === 'lg' ? 'text-3xl' : 'text-xl'}>🇪🇺</span>;
@@ -56,7 +56,7 @@ export default function Home() {
   const [adminRates, setAdminRates] = useState<any>({
     'EUR_DZD': { buyBase: '100', buyQuote: '14500', sellBase: '100', sellQuote: '14700', buyBaseW: '1000', buyQuoteW: '148000', sellBaseW: '1000', sellQuoteW: '150000' },
     'EUR_MRU': { buyBase: '100', buyQuote: '4250', sellBase: '100', sellQuote: '4400', buyBaseW: '1000', buyQuoteW: '43500', sellBaseW: '1000', sellQuoteW: '45000' },
-    'DZD_MRU': { buyBase: '100', buyQuote: '29', sellBase: '100', sellQuote: '30', buyBaseW: '1000', buyQuoteW: '295', sellBaseW: '1000', sellQuoteW: '305' },
+    'DZD_MRU': { buyBase: '345', buyQuote: '100', sellBase: '335', sellQuote: '100', buyBaseW: '3390', buyQuoteW: '1000', sellBaseW: '3280', sellQuoteW: '1000' },
   });
 
   useEffect(() => {
@@ -87,16 +87,33 @@ export default function Home() {
           sellWholesale: row.sell_rate_wholesale || row.sell_rate * 1.02,
         };
 
-        newAdminRates[key] = {
-          buyBase: '100',
-          buyQuote: (row.buy_rate * 100).toString(),
-          sellBase: '100',
-          sellQuote: (row.sell_rate * 100).toString(),
-          buyBaseW: '1000',
-          buyQuoteW: ((row.buy_rate_wholesale || row.buy_rate * 1.02) * 1000).toString(),
-          sellBaseW: '1000',
-          sellQuoteW: ((row.sell_rate_wholesale || row.sell_rate * 1.02) * 1000).toString(),
-        };
+        const buyW = row.buy_rate_wholesale || row.buy_rate * 1.02;
+        const sellW = row.sell_rate_wholesale || row.sell_rate * 1.02;
+
+        // ✅ حالة خاصة لـ DURO/MRU: نعرضها بنفس الطريقة التي أدخلها المستخدم
+        if (row.from_currency === 'DZD' && row.to_currency === 'MRU') {
+          newAdminRates[key] = {
+            buyBase: (100 / row.buy_rate).toString(),
+            buyQuote: '100',
+            sellBase: (100 / row.sell_rate).toString(),
+            sellQuote: '100',
+            buyBaseW: (1000 / buyW).toString(),
+            buyQuoteW: '1000',
+            sellBaseW: (1000 / sellW).toString(),
+            sellQuoteW: '1000',
+          };
+        } else {
+          newAdminRates[key] = {
+            buyBase: '100',
+            buyQuote: (row.buy_rate * 100).toString(),
+            sellBase: '100',
+            sellQuote: (row.sell_rate * 100).toString(),
+            buyBaseW: '1000',
+            buyQuoteW: (buyW * 1000).toString(),
+            sellBaseW: '1000',
+            sellQuoteW: (sellW * 1000).toString(),
+          };
+        }
       });
       
       setRates(newRates);
@@ -105,13 +122,13 @@ export default function Home() {
     setIsLoading(false);
   };
 
-  // ✅ السجل الجديد: آخر سعرين فقط لكل زوج
+  // ✅ السجل: آخر سعرين لكل زوج
   const fetchHistory = async () => {
     const { data, error } = await supabase
       .from('rate_history')
       .select('*')
       .order('recorded_at', { ascending: false })
-      .limit(60);
+      .limit(100);
     
     if (error) {
       console.error('Error fetching history:', error);
@@ -122,11 +139,8 @@ export default function Home() {
       const grouped: any = {};
       data.forEach((row: any) => {
         const key = `${row.from_currency}_${row.to_currency}`;
-        if (!grouped[key]) {
-          grouped[key] = [row];
-        } else if (grouped[key].length < 2) {
-          grouped[key].push(row);
-        }
+        if (!grouped[key]) grouped[key] = [];
+        if (grouped[key].length < 2) grouped[key].push(row);
       });
       
       const result = Object.entries(grouped)
@@ -135,10 +149,10 @@ export default function Home() {
           key,
           from: records[0].from_currency,
           to: records[0].to_currency,
-          oldBuy: records[1].buy_rate,  // الأقدم (السابق)
-          newBuy: records[0].buy_rate,  // الأحدث (الحالي)
+          oldBuy: records[1].buy_rate,
+          newBuy: records[0].buy_rate,
         }))
-        .filter((item: any) => item.oldBuy !== item.newBuy); // فقط الذي تغير
+        .filter((item: any) => Math.abs(item.oldBuy - item.newBuy) > 0.0001);
       
       setHistoryData(result);
     } else {
@@ -259,7 +273,6 @@ export default function Home() {
     );
   }
 
-  // ===== صفحة الإعدادات =====
   if (showSettings) {
     return (
       <main className="min-h-screen bg-[#0B1120] text-white font-sans p-4" dir="rtl">
@@ -347,49 +360,55 @@ export default function Home() {
               {[
                 { key: 'EUR_DZD', fromCode: 'EUR', toCode: 'DZD' },
                 { key: 'EUR_MRU', fromCode: 'EUR', toCode: 'MRU' },
-                { key: 'DZD_MRU', fromCode: 'DZD', toCode: 'MRU' },
-              ].map((pair) => (
-                <div key={pair.key} className="bg-[#0B1120] p-4 rounded-xl border border-[#233554]">
-                  <div className="flex items-center justify-center gap-3 mb-4">
-                    <CurrencyFlag code={pair.fromCode} size="sm" />
-                    <span className="text-gray-400 font-bold">➡️</span>
-                    <CurrencyFlag code={pair.toCode} size="sm" />
-                    <span className="font-bold text-sm text-yellow-400 mr-2">
-                      {displayCurrency(pair.fromCode)} / {displayCurrency(pair.toCode)}
-                    </span>
-                  </div>
-                  
-                  <div className="mb-4 bg-[#112240] p-3 rounded-lg border border-blue-500/30">
-                    <p className="text-xs font-bold text-blue-400 mb-2">سعر الشراء</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.fromCode)}</p>
-                      </div>
+                { key: 'DZD_MRU', fromCode: 'DZD', toCode: 'MRU', flipped: true },
+              ].map((pair) => {
+                // ✅ للزوج DURO/MRU نعرض MRU على اليمين (كأساس) و DURO على اليسار
+                const rightCode = pair.flipped ? 'MRU' : pair.fromCode;
+                const leftCode = pair.flipped ? pair.fromCode : pair.toCode;
+                
+                return (
+                  <div key={pair.key} className="bg-[#0B1120] p-4 rounded-xl border border-[#233554]">
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                      <CurrencyFlag code={rightCode} size="sm" />
                       <span className="text-gray-400 font-bold">=</span>
-                      <div className="flex-1">
-                        <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.toCode)}</p>
+                      <CurrencyFlag code={leftCode} size="sm" />
+                      <span className="font-bold text-sm text-yellow-400 mr-2">
+                        {displayCurrency(rightCode)} / {displayCurrency(leftCode)}
+                      </span>
+                    </div>
+                    
+                    <div className="mb-4 bg-[#112240] p-3 rounded-lg border border-blue-500/30">
+                      <p className="text-xs font-bold text-blue-400 mb-2">سعر الشراء</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
+                          <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(rightCode)}</p>
+                        </div>
+                        <span className="text-gray-400 font-bold">=</span>
+                        <div className="flex-1">
+                          <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
+                          <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(leftCode)}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="bg-[#112240] p-3 rounded-lg border border-green-500/30">
-                    <p className="text-xs font-bold text-green-400 mb-2">سعر البيع</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.fromCode)}</p>
-                      </div>
-                      <span className="text-gray-400 font-bold">=</span>
-                      <div className="flex-1">
-                        <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.toCode)}</p>
+                    <div className="bg-[#112240] p-3 rounded-lg border border-green-500/30">
+                      <p className="text-xs font-bold text-green-400 mb-2">سعر البيع</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
+                          <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(rightCode)}</p>
+                        </div>
+                        <span className="text-gray-400 font-bold">=</span>
+                        <div className="flex-1">
+                          <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
+                          <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(leftCode)}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               <button onClick={saveRatesToSupabase} disabled={isSaving} className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition mt-4 shadow-lg shadow-blue-500/20">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
@@ -402,7 +421,6 @@ export default function Home() {
     );
   }
 
-  // ===== الواجهة الرئيسية =====
   return (
     <main className="min-h-screen bg-[#0B1120] text-white font-sans p-4 pb-24" dir="rtl">
       <header className="flex justify-between items-center mb-6 pt-2">
@@ -524,14 +542,12 @@ export default function Home() {
                       </div>
                       {isUp && <TrendingUp className="text-red-400 w-5 h-5" />}
                       {isDown && <TrendingDown className="text-green-400 w-5 h-5" />}
-                      {!isUp && !isDown && <span className="text-gray-400 text-xs">مستقر</span>}
                     </div>
                     <div className="space-y-1 text-sm">
                       <p className="text-gray-300">سابقاً: 100 {fromDisplay} = <span className="text-gray-400">{oldAmount} {toDisplay}</span></p>
                       <p className="text-gray-300">الآن: 100 {fromDisplay} = <span className="text-white font-bold">{newAmount} {toDisplay}</span></p>
                       {isUp && <p className="font-bold text-red-400 mt-2">📈 زاد السعر بـ {diffAmount} {toDisplay}</p>}
                       {isDown && <p className="font-bold text-green-400 mt-2">📉 نقص السعر بـ {diffAmount} {toDisplay}</p>}
-                      {!isUp && !isDown && <p className="font-bold text-gray-400 mt-2">➖ لم يتغير السعر</p>}
                     </div>
                   </div>
                 );
