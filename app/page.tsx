@@ -13,12 +13,23 @@ const APP_VERSION = '1.0.0';
 const CONTACT_EMAIL = 'ahmedbacare95@gmail.com';
 const WHATSAPP_NUMBER = '213666899713';
 
-// تحويل رمز العملة المخزّن إلى الاسم المعروض
 const displayCurrency = (code: string) => code === 'DZD' ? 'DURO' : code;
-const displayFlag = (code: string) => code === 'EUR' ? '🇪🇺' : code === 'DZD' ? '🇪🇭' : '🇲🇷';
 
 const formatMoney = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+};
+
+// مكوّن شعار العملة
+const CurrencyFlag = ({ code, size = 'lg' }: { code: string; size?: 'lg' | 'sm' }) => {
+  const sz = size === 'lg' ? 'w-9 h-9 text-[11px]' : 'w-7 h-7 text-[9px]';
+  if (code === 'EUR') return <span className={size === 'lg' ? 'text-3xl' : 'text-xl'}>🇪🇺</span>;
+  if (code === 'MRU') return <span className={size === 'lg' ? 'text-3xl' : 'text-xl'}>🇲🇷</span>;
+  if (code === 'DZD') return (
+    <span className={`inline-flex items-center justify-center ${sz} rounded-md font-bold text-white border border-gray-600 shadow-sm bg-gradient-to-b from-black via-green-700 to-red-600`}>
+      SH
+    </span>
+  );
+  return null;
 };
 
 export default function Home() {
@@ -94,15 +105,13 @@ export default function Home() {
     setIsLoading(false);
   };
 
+  // ✅ السجل الجديد: آخر سعرين فقط لكل زوج
   const fetchHistory = async () => {
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    
     const { data, error } = await supabase
       .from('rate_history')
       .select('*')
-      .gte('recorded_at', twoWeeksAgo.toISOString())
-      .order('recorded_at', { ascending: true });
+      .order('recorded_at', { ascending: false })
+      .limit(60);
     
     if (error) {
       console.error('Error fetching history:', error);
@@ -113,16 +122,24 @@ export default function Home() {
       const grouped: any = {};
       data.forEach((row: any) => {
         const key = `${row.from_currency}_${row.to_currency}`;
-        if (!grouped[key]) grouped[key] = { first: row, last: row };
-        grouped[key].last = row;
+        if (!grouped[key]) {
+          grouped[key] = [row];
+        } else if (grouped[key].length < 2) {
+          grouped[key].push(row);
+        }
       });
-      const result = Object.entries(grouped).map(([key, val]: any) => ({
-        key,
-        from: val.first.from_currency,
-        to: val.first.to_currency,
-        oldBuy: val.first.buy_rate,
-        newBuy: val.last.buy_rate,
-      }));
+      
+      const result = Object.entries(grouped)
+        .filter(([_, records]: any) => records.length === 2)
+        .map(([key, records]: any) => ({
+          key,
+          from: records[0].from_currency,
+          to: records[0].to_currency,
+          oldBuy: records[1].buy_rate,  // الأقدم (السابق)
+          newBuy: records[0].buy_rate,  // الأحدث (الحالي)
+        }))
+        .filter((item: any) => item.oldBuy !== item.newBuy); // فقط الذي تغير
+      
       setHistoryData(result);
     } else {
       setHistoryData([]);
@@ -328,24 +345,31 @@ export default function Home() {
             
             <div className="space-y-6">
               {[
-                { key: 'EUR_DZD', label: '🇪🇺 يورو ➡️ 🇪🇭 دورو', from: 'EUR', to: 'DURO' },
-                { key: 'EUR_MRU', label: '🇪🇺 يورو ➡️ 🇲🇷 أوقية', from: 'EUR', to: 'MRU' },
-                { key: 'DZD_MRU', label: '🇪🇭 دورو ➡️ 🇲🇷 أوقية', from: 'DURO', to: 'MRU' },
+                { key: 'EUR_DZD', fromCode: 'EUR', toCode: 'DZD' },
+                { key: 'EUR_MRU', fromCode: 'EUR', toCode: 'MRU' },
+                { key: 'DZD_MRU', fromCode: 'DZD', toCode: 'MRU' },
               ].map((pair) => (
                 <div key={pair.key} className="bg-[#0B1120] p-4 rounded-xl border border-[#233554]">
-                  <h3 className="font-bold text-sm mb-4 text-center text-yellow-400">{pair.label}</h3>
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <CurrencyFlag code={pair.fromCode} size="sm" />
+                    <span className="text-gray-400 font-bold">➡️</span>
+                    <CurrencyFlag code={pair.toCode} size="sm" />
+                    <span className="font-bold text-sm text-yellow-400 mr-2">
+                      {displayCurrency(pair.fromCode)} / {displayCurrency(pair.toCode)}
+                    </span>
+                  </div>
                   
                   <div className="mb-4 bg-[#112240] p-3 rounded-lg border border-blue-500/30">
                     <p className="text-xs font-bold text-blue-400 mb-2">سعر الشراء</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{pair.from}</p>
+                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.fromCode)}</p>
                       </div>
                       <span className="text-gray-400 font-bold">=</span>
                       <div className="flex-1">
                         <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`buyQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `buyQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{pair.to}</p>
+                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.toCode)}</p>
                       </div>
                     </div>
                   </div>
@@ -355,12 +379,12 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellBase${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellBase${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{pair.from}</p>
+                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.fromCode)}</p>
                       </div>
                       <span className="text-gray-400 font-bold">=</span>
                       <div className="flex-1">
                         <input type="text" inputMode="numeric" value={adminRates[pair.key]?.[`sellQuote${suffix}`] || ''} onChange={(e) => updateAdminRate(pair.key, `sellQuote${suffix}`, e.target.value.replace(/[^0-9.]/g, ''))} className="w-full bg-[#0B1120] border border-[#233554] rounded-lg p-2 text-center font-bold text-sm" />
-                        <p className="text-[10px] text-gray-500 text-center mt-1">{pair.to}</p>
+                        <p className="text-[10px] text-gray-500 text-center mt-1">{displayCurrency(pair.toCode)}</p>
                       </div>
                     </div>
                   </div>
@@ -412,7 +436,7 @@ export default function Home() {
           <div className="bg-[#112240] rounded-3xl p-5 border border-[#233554] mb-6 shadow-xl">
             <div className="flex justify-between items-center bg-[#0B1120] rounded-2xl p-4 mb-3 border border-[#233554]">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{displayFlag(fromCurrency)}</span>
+                <CurrencyFlag code={fromCurrency} />
                 <select value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} className="bg-transparent text-white font-bold outline-none text-lg cursor-pointer">
                   <option value="EUR" className="bg-[#112240]">EUR - يورو</option>
                   <option value="DZD" className="bg-[#112240]">DURO - دورو صحراوي</option>
@@ -430,7 +454,7 @@ export default function Home() {
 
             <div className="flex justify-between items-center bg-[#0B1120] rounded-2xl p-4 mt-3 border border-[#233554]">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{displayFlag(toCurrency)}</span>
+                <CurrencyFlag code={toCurrency} />
                 <select value={toCurrency} onChange={(e) => setToCurrency(e.target.value)} className="bg-transparent text-white font-bold outline-none text-lg cursor-pointer">
                   <option value="DZD" className="bg-[#112240]">DURO - دورو صحراوي</option>
                   <option value="EUR" className="bg-[#112240]">EUR - يورو</option>
@@ -467,14 +491,14 @@ export default function Home() {
         <div className="animate-fadeIn">
           <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-500/30 rounded-2xl p-5 mb-6 text-center">
             <h2 className="text-xl font-bold text-green-400 mb-1">مرحباً بك عزيزي الزبون 👋</h2>
-            <p className="text-sm text-gray-300">إليك تطور أسعار الصرف خلال الأسبوعين الماضيين</p>
+            <p className="text-sm text-gray-300">آخر تغييرات أسعار الصرف</p>
           </div>
           
           {historyData.length === 0 ? (
             <div className="bg-[#112240] p-8 rounded-2xl border border-[#233554] text-center">
               <History className="w-12 h-12 text-gray-500 mx-auto mb-3" />
               <p className="text-gray-400">لا يوجد سجل تغييرات بعد.</p>
-              <p className="text-xs text-gray-500 mt-2">سيظهر السجل بعد قيام الموظفين بتحديث الأسعار.</p>
+              <p className="text-xs text-gray-500 mt-2">سيظهر السجل بعد قيام الموظفين بتحديث الأسعار مرتين على الأقل.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -491,7 +515,13 @@ export default function Home() {
                 return (
                   <div key={idx} className="bg-[#112240] p-4 rounded-2xl border border-[#233554]">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-bold text-lg">{fromDisplay} ➡️ {toDisplay}</span>
+                      <div className="flex items-center gap-2">
+                        <CurrencyFlag code={item.from} size="sm" />
+                        <span className="font-bold text-lg">{fromDisplay}</span>
+                        <span className="text-gray-500">➡️</span>
+                        <CurrencyFlag code={item.to} size="sm" />
+                        <span className="font-bold text-lg">{toDisplay}</span>
+                      </div>
                       {isUp && <TrendingUp className="text-red-400 w-5 h-5" />}
                       {isDown && <TrendingDown className="text-green-400 w-5 h-5" />}
                       {!isUp && !isDown && <span className="text-gray-400 text-xs">مستقر</span>}
