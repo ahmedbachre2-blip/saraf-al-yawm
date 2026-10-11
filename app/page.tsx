@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowRightLeft, Settings, Calculator, Clock, History, Lock, TrendingUp, TrendingDown, Save, LogOut, Loader2, Package, Store, X, Mail, Info } from 'lucide-react';
+import { ArrowRightLeft, Settings, Calculator, Clock, History, Lock, TrendingUp, TrendingDown, Save, LogOut, Loader2, Package, Store, X, Mail, Info, MessageCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://ioymmwdwccpqzocwtixc.supabase.co';
@@ -10,7 +10,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const THRESHOLD = 1000;
 const APP_VERSION = '1.0.0';
-const CONTACT_EMAIL = 'ahmedbacare95@gmail.com'; // ← إيميلك هنا
+const CONTACT_EMAIL = 'ahmedbacare95@gmail.com';
+const WHATSAPP_NUMBER = '213666899713'; // ← رقمك بصيغة دولية بدون +
 
 const formatMoney = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
@@ -451,9 +452,14 @@ export default function Home() {
             <Clock className="w-4 h-4 text-gray-500" />
           </div>
 
-          <button className="w-full bg-green-500 hover:bg-green-600 active:scale-[0.98] text-white font-bold py-4 rounded-2xl mb-8 flex justify-center items-center gap-2 transition-all shadow-lg shadow-green-500/25">
-            <Calculator className="w-6 h-6" /> تأكيد التحويل
-          </button>
+          <a
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=مرحباً، أريد الاستفسار عن أسعار الصرف`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full bg-[#25D366] hover:bg-[#1EBE5D] active:scale-[0.98] text-white font-bold py-4 rounded-2xl mb-8 flex justify-center items-center gap-2 transition-all shadow-lg shadow-[#25D366]/25"
+          >
+            <MessageCircle className="w-6 h-6" /> تواصل معنا عبر واتساب
+          </a>
         </div>
       )}
 
@@ -515,4 +521,4 @@ export default function Home() {
       </nav>
     </main>
   );
-} 
+}
